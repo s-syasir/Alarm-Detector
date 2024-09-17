@@ -79,9 +79,9 @@ void setup() {
   Serial.begin(115200, SERIAL_8N1);
 
   // <DEBUG> Printing boot number:
-  Serial.print("Boot Count: ");
-  Serial.println(bootCount);
-  print_wakeup_reason();
+  // Serial.print("Boot Count: ");
+  // Serial.println(bootCount);
+  // print_wakeup_reason();
 
   // <DEBUG> (NOTE: this is unnecessary). Turn off the bright onboard LED
   // pinMode(ONBOARD_LED,OUTPUT);
@@ -96,13 +96,13 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     currSec = currSec + 1;
-    Serial.print(".");
+    // Serial.print(".");
   }
 
   // <DEBUG> Printing out that we've officially connected and what our IP is.
-  Serial.println("WiFi connected.");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  // Serial.println("WiFi connected.");
+  // Serial.println("IP address: ");
+  // Serial.println(WiFi.localIP());
 
   // Setting the server to be the mqtt_server from header file
   // and the specific port that server uses (1883)
@@ -115,17 +115,12 @@ void setup() {
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
   // Store the current time to the timeinfo struct
-  // TODO: track how long it takes to fail to get the time
-  // and add to the offline time that estimated differential,
-  // AGAIN, similar to adding the wifi delay to the currSec, this serves to
-  // add to the seconds during offline operation to ensure closest accuracy
-  // possible to proper NTP tracked time.
   struct tm timeinfo;
   if(!getLocalTime(&timeinfo)){
     // <DEBUG> Printing that we're using the previously stored time += timer
     // rather than the actual updated time, thus this time will be off by a few seconds
     // every time, adding up to a few mintues, everyday.
-    Serial.println("Failed to obtain time. Sticking to time += timer from previous sleep cycle. We're off by a few seconds at least.");
+    Serial.println("Failed to obtain time. Sticking to time += timer from previous sleep cycle. We're off by a few seconds, probbaly");
   }
   else {
     // Getting the current time from the NTP server.
@@ -135,33 +130,114 @@ void setup() {
   }
 
   // FUTURE TODO: Adjusting ntp offset based on the Daylight savings?
-  // TODO: Push this tm_isdst info to the NodeRed database, to keep track
   // if isdst updates and if that updates the time used and works properly.
   // If isdst updates then the FUTURE TODO of adjusting ntp offset based on 
   // daylight savings is unnecessary.
   // <DEBUG> Printing out daylight savings being true or not
-  Serial.println("Daylight savings?");
-  Serial.println(timeinfo.tm_isdst);
+  // Serial.println("Daylight savings?");
+  // Serial.println(timeinfo.tm_isdst);
 
-  int lightVal = analogRead(sensorPin); // read the current light levels
+  // Read the current light levels and publish the 
+  int lightVal = analogRead(sensorPin);
   String val = String(lightVal);
-  char pub_val[val.length() + 1];
-  val.toCharArray(pub_val, sizeof(pub_val));
+
+  // FSM states: off, light_first_on, light_continued_on. {0,1,2}
+  // FSM logic: stay off, until. the first time the alarm goes above the threshold, 
+  // (if lightVal > ALARM_LIGHT_THRESHOLD && !light_first_on) then move state to light_first_on 
+  // The second time the alarm light goes above the threshold,
+  // (if lightVal > ALARM_LIGHT_THRESHOLD && !light_continue_on) then set the state to light_continue_on.
+  // The third time the alarm goes above the threshold, (you're in light_continue_on) and 
+  // if (light_first_on && light_continue_on && lightVal > ALARM_LIGHT_THRESHOLD) then TURN ON LIGHTS.
+  // Then delay for 10 minutes somehow, and then restart the ESP to the beginning.
+  switch (currentState) {
+    case 0:
+      // <DEBUG>: Printing out that we're in the off state.
+      Serial.println("WE ARE IN OFF STATE?");
+      if (lightVal > ALARM_LIGHT_THRESHOLD) {
+        currentState = 1;
+      }
+      else{
+        currentState = 0;
+      }
+      break;
+    case 1:
+      // <DEBUG>: Printing out that we're in the light on first time state.
+      Serial.println("WE ARE IN LIGHT_ON_FIRST_TIME STATE?");
+      if (lightVal > ALARM_LIGHT_THRESHOLD) {
+        currentState = 2;
+      }
+      else{
+        currentState = 0;
+      }
+      break;
+    case 2:
+      // <DEBUG>: Printing out that we're in the continued light state.
+      Serial.println("WE ARE IN CONTINUED LIGHT STATE? IF THE THRESHOLD IS GOOD HERE. ITS TIME TO BLOW");
+      if (lightVal > ALARM_LIGHT_THRESHOLD) {
+        // TODO: add home assistant arduino library integration stuff here to send out a TURN ON LIGHTS signal
+        Serial.println("LIGHTS ARE ON BEEDOBEEEDOBEEDOBEEDO");
+        currentState = 0;
+        // delay(60*1000);
+        ESP.restart();
+      }
+      else{
+        currentState = 0;
+      }
+      break;
+  }
 
   // Loop reconnecting to the MQTT until done?
-  int count = 0;
+  int failed_count = 1;
+  while (!client.connected() && failed_count < 4) {
+    // <DEBUG> Printing out the debugging process, started.
+    // Serial.print("Attempting MQTT connection...");
+    // Attempt to connect to the MQTT server
+    if (client.connect("ESP8266Client")) {
+      // <DEBUG> Printing out the debugging process, connected succesfully
+      Serial.println("connected");
+    } else {
+      // <DEBUG> Printing out the debugging process, failed to connect. Retry
+      // Serial.print("failed, rc=");
+      // Serial.print(client.state());
+      // Serial.println(" try again in 5 seconds");
+      // Serial.println(failed_count);
+      // Wait 5 seconds before retrying.
+      currSec = currSec + 5;
+      failed_count = failed_count + 1;
+      delay(5000);
+    }
+  }
   client.loop();
-  
-  client.publish("flashing_lights", pub_val);
-  Serial.println(client.connected());
+
+  if (failed_count < 4) {
+    if (currentState == 0) {
+      val = val + " Current State = OFF";
+    }
+    if (currentState == 1) {
+      val = val + " Current State = LIGHT_ON_FIRST_TIME";
+    }
+    if (currentState == 2) {
+      if (lightVal > ALARM_LIGHT_THRESHOLD) {
+        val = val + " Current State = LIGHT_ON_CONTINUE, ALARM SOON???";
+      }
+      else {
+        val = val + " Current State = LIGHT_ON_CONTINUE, NO ALARM";
+      }
+    }
+    char pub_val[val.length() + 1];
+    val.toCharArray(pub_val, sizeof(pub_val));
+    client.publish("flashing_lights", pub_val);
+    // <DEBUG> Sending out the data via MQTT to the MQTT server. NOT the Home Assistant Server.
+    // Serial.println("sent out data????");
+  }
   
   // <DEBUG> Printing out the photoresistor value.
-  Serial.println();
-  Serial.println("This is the photoresistor value: ");
-  Serial.println(lightVal);
+  // Serial.println();
+  // Serial.println("This is the photoresistor value: ");
+  // Serial.println(lightVal);
 
   // <DEBUG> Printing out the current timme
-  Serial.println("Current time: ");
+  // Serial.println("Current time: ");
   Serial.print(currHour);
   Serial.print(":");
   Serial.print(currMin);
@@ -193,12 +269,12 @@ void setup() {
   // to get the actual time we want to sleep.
   int wakeUpTimeAsSeconds = (nearestSleepHour * 3600) + (nearestSleepMin * 60);
   // <DEBUG> Printing out this wakeUpTime
-  Serial.println(wakeUpTimeAsSeconds);
-  Serial.println(wakeUpTimeAsSeconds - currTimeAsSeconds);
+  // Serial.println(wakeUpTimeAsSeconds);
+  // Serial.println(wakeUpTimeAsSeconds - currTimeAsSeconds);
 
   sleepTimer = (wakeUpTimeAsSeconds - currTimeAsSeconds) * uS_TO_S_FACTOR;
-  // <DEBUG> Setting the timer to be just 10 seconds, why...
-  sleepTimer = 10 * uS_TO_S_FACTOR;
+  // <DEBUG> Setting the timer to be just 10 seconds.
+  // sleepTimer = 10 * uS_TO_S_FACTOR;
 
   // Lastly, setting the current time to what the projected nearest 30 minute interval was, again, this should be correct upon wakeup, and while it will be off by a few seconds, 
   // the ntp server will correct it and if the ntp server doesnt catch it and this, worst case the alarm is off by a few seconds, I think.
@@ -207,12 +283,12 @@ void setup() {
   currSec = 0;
 
   // <DEBUG> Printing out the future projected time.
-  Serial.println("Future projected time: ");
-  Serial.print(currHour);
-  Serial.print(":");
-  Serial.print(currMin);
-  Serial.print(":");
-  Serial.println(currSec);
+  // Serial.println("Future projected time: ");
+  // Serial.print(currHour);
+  // Serial.print(":");
+  // Serial.print(currMin);
+  // Serial.print(":");
+  // Serial.println(currSec);
 
   // Calls on deep sleep with the timer
   deep_sleep();
@@ -240,6 +316,6 @@ void print_wakeup_reason(){
 
 void deep_sleep(){
   esp_sleep_enable_timer_wakeup(sleepTimer);
-  Serial.println("Going to sleep now");
+  // Serial.println("Going to sleep now");
   esp_deep_sleep_start();
 }
