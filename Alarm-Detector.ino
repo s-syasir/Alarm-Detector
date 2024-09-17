@@ -152,36 +152,43 @@ void setup() {
   switch (currentState) {
     case 0:
       // <DEBUG>: Printing out that we're in the off state.
-      Serial.println("WE ARE IN OFF STATE?");
+      // Serial.println("WE ARE IN OFF STATE?");
       if (lightVal > ALARM_LIGHT_THRESHOLD) {
         currentState = 1;
+        val = val + ", LIGHT_ON_FT";
       }
       else{
         currentState = 0;
+        val = val + ", OFF";
       }
       break;
     case 1:
       // <DEBUG>: Printing out that we're in the light on first time state.
-      Serial.println("WE ARE IN LIGHT_ON_FIRST_TIME STATE?");
+      // Serial.println("WE ARE IN LIGHT_ON_FIRST_TIME STATE?");
       if (lightVal > ALARM_LIGHT_THRESHOLD) {
         currentState = 2;
+        val = val + ", LIGHT_ON_CT";
       }
       else{
         currentState = 0;
+        val = val + ", OFF";
       }
       break;
     case 2:
       // <DEBUG>: Printing out that we're in the continued light state.
-      Serial.println("WE ARE IN CONTINUED LIGHT STATE? IF THE THRESHOLD IS GOOD HERE. ITS TIME TO BLOW");
+      // Serial.println("WE ARE IN CONTINUED LIGHT STATE? IF THE THRESHOLD IS GOOD HERE. ITS TIME TO BLOW");
       if (lightVal > ALARM_LIGHT_THRESHOLD) {
         // TODO: add home assistant arduino library integration stuff here to send out a TURN ON LIGHTS signal
-        Serial.println("LIGHTS ARE ON BEEDOBEEEDOBEEDOBEEDO");
+        // Serial.println("LIGHTS ARE ON!");
+        val = val + ", ALARM TIME!";
         currentState = 0;
+        // Wait 10 min, and then restart the ESP, repeat cycle for the day.
         // delay(60*1000);
         ESP.restart();
       }
       else{
         currentState = 0;
+        val = val + ", OFF";
       }
       break;
   }
@@ -210,20 +217,6 @@ void setup() {
   client.loop();
 
   if (failed_count < 4) {
-    if (currentState == 0) {
-      val = val + " Current State = OFF";
-    }
-    if (currentState == 1) {
-      val = val + " Current State = LIGHT_ON_FIRST_TIME";
-    }
-    if (currentState == 2) {
-      if (lightVal > ALARM_LIGHT_THRESHOLD) {
-        val = val + " Current State = LIGHT_ON_CONTINUE, ALARM SOON???";
-      }
-      else {
-        val = val + " Current State = LIGHT_ON_CONTINUE, NO ALARM";
-      }
-    }
     char pub_val[val.length() + 1];
     val.toCharArray(pub_val, sizeof(pub_val));
     client.publish("flashing_lights", pub_val);
