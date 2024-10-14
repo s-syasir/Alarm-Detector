@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="60">
+  <title>ESP-32 Alarm Detector Data</title>
+  <style>
+    
+    .red-text {
+      color: red;
+    }
+
+    .green-text {
+      color:green;
+    }
+
+    body {
+      background-color: #f2f2f2;
+      font-family: Arial, sans-serif;
+
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #fffffff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    tr:nth-child(odd) {
+      background-color: #ffffff;
+    }
+
+    th {
+      background-color: #333333;
+      color: #ffffff;
+    }
+
+    .stats-box {
+      display: inline-block;
+      padding: 10px;
+      background-color: #5d782e;
+      color: #ffffff;
+      font-weight: bold;
+      margin-left: 10px;
+      float: left;
+    }
+
+
+  </style>
+</head>
+
+<body>
+  <h1>ESP-32 Alarm Detector Data</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Pacific Datetime</th>
+        <th>Light Vals</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in data %}
+        <tr>
+          <td>{{ row[0] }}</td>
+          <td>{{ row[1] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
+
