@@ -17,4 +17,4 @@ sudo python3 photoresistor_detector.py &
 sudo python3 mqtt_frontend.py &
 
 # OPTIONAL: print out the values in the database to debug and see where things are going wrong, etc.
-#python3 /home/yasir/Scripts/Alarm-Detector/mqtt_frontend/db_tools/print_db.py
+#sudo python3 ./db_tools/print_db.py
