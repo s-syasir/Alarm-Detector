@@ -4,6 +4,8 @@ import RPi.GPIO as GPIO
 import time
 import datetime
 import sqlite3
+import paho.mqtt.client as mqtt
+
 # photoresistor_detector.py
 # This file reads in the data coming in from the photoresistor and
 # makes decisions on calling on the Zigbee hub to activate the 
@@ -74,8 +76,30 @@ def get_sleep_duration(current_time):
 
     return (target_time_as_seconds - curr_time_as_seconds)
 
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print ("Connected to MQTT broker")
+    else:
+        print ("Failed to connect, return code: ", rc)
+
+def on_message(client, userdata, msg):
+    # Decoding the incoming mqtt message and getting the current datettime in pacific
+    message = msg.payload.decode()
+
+    # <DEBUG>: printing out the data as it comes in
+    print("Received message '" + message)
+    print(current_time)
+
+def send_out_mqtt_message(mqtt_client):
+    mqtt_client.username_pw_set(secrets.username, secrets.password)
+    mqtt_client.connect(secrets.ip_addr, 1883, 60)
+    mqtt_client.publish("alarmTrigger", "ON")
+
 def main():
     #Catch when script is interrupted, cleanup correctly
+    mqtt_client = mqtt.Client()
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
     try:
         # Main loop
         while True:
@@ -100,6 +124,8 @@ def main():
             conn.close()
 
             time.sleep(get_sleep_duration(datetime.datetime.now()))
+
+            send_out_mqtt_message(mqtt_client)
 
 
 
